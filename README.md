@@ -10,9 +10,9 @@ Something awesome.
 
 Nothing special.
 
-## How do I run?
+## How do I run it?
 
-With _Fakemile.sh_ (ensure having GCC and libncurses-dev installed on your system).
+With _Fakemile.sh_ <FILE> (ensure having GCC and libncurses-dev installed on your system).
 
 ## Was making this shit worth?
 

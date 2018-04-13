@@ -1,3 +1,3 @@
 #!/bin/sh
-gcc -lcurses -o test test.c 
-./test
+gcc -o test test.c -lncurses 
+./test $1

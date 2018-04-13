@@ -24,54 +24,26 @@
 
 #include <curses.h>
 
-typedef struct something
-{
-  char* some_a;
-  char some_b;
-} something_t;
-
-typedef struct something_awesome
-{
-  char* some_awesome_a;
-  char* some_awesome_b;
-} something_awesome_t;
-
-void                 init_rng                    ();
-void                 init_fake_sh                ();
-void                 terminate_fake_sh           ();
-
-something_t*         do_something_with_something (char* thing);
-char*                something_extract_some_a    (something_t* something);
-char                 something_extract_some_b    (something_t* something);
-void                 something_do_something      (something_t* something);
-void                 undo_something_with_some_something
-                                                 (something_t* something);
-
-something_awesome_t* do_something_awesome_with_some_something
-                                                (something_t* something);
-char*                something_awesome_extract_some_awesome_a
-                                                (something_awesome_t* something_awesome);
-char*                something_awesome_extract_some_awesome_b
-                                                (something_awesome_t* something_awesome);
-void                 something_awesome_do_something_awesome
-                                                (something_awesome_t* something_awesome);
-void                 undo_something_awesome_with_some_something_awesome
-                                                (something_awesome_t* something_awesome);
-
-const char* thing =
-  "Cuando despertó, el dinosaurio todavía estaba allí";
+#include "test.h"
 
 int
 main(int argc,
      char** argv)
 {
+  /* Check parameters */
+  if(argc < 2) {
+    fprintf(stderr, "Error: missing argument\n");
+    exit (-1);
+  }
+
+  thing = read_string_from_file (argv[1]);
 
   init_fake_sh ();
   init_rng ();
 
   /* Something */
   something_t* something;
-  something = do_something_with_something ((char*) thing);
+  something = do_something_with_something (thing);
   something_do_something (something);
 
   /* Something awesome */
@@ -82,6 +54,7 @@ main(int argc,
   /* Responsability */
   undo_something_with_some_something (something);
   undo_something_awesome_with_some_something_awesome (something_awesome);
+  free (thing);
 
   terminate_fake_sh ();
 
@@ -96,31 +69,143 @@ void init_rng ()
 
 void init_fake_sh ()
 {
+
   /* Init Ncurses */
   initscr ();
+  cbreak ();
+  keypad(stdscr, TRUE);
+
+  /* Color */
   start_color ();
-  /*init_pair (1, COLOR_BLACK, COLOR_RED);*/
-  init_pair (1, COLOR_GREEN, COLOR_BLACK);
-
-  attron (COLOR_PAIR (1));
-  printw("%% load_str \"%s\"", thing);
-  attroff (COLOR_PAIR (1));
-
-  getch();
+  init_pair (1, COLOR_BLACK, COLOR_RED);
+  init_pair (2, COLOR_BLUE, COLOR_WHITE);
   refresh ();
 
-  printw("[SUCCESS]\n");
+  /* Init window */
+  init_win_ ();
+
+  refresh ();
+
+  wattron (local_win, COLOR_PAIR (1));
+
+  char* short_thing;
+  if (strlen(thing) > 50) {
+    short_thing = (char*) malloc (54*sizeof(char));
+    memcpy (short_thing, thing, 50);
+    short_thing[50] =
+      short_thing[51] =
+      short_thing[52] = '.';
+    short_thing[53] = '\0';
+  } else {
+    short_thing = thing;
+  }
+
+  wprintw(local_win, "%% load_str \"%s\"\n", short_thing);
+  wattroff (local_win, COLOR_PAIR (1));
+
+  wrefresh (local_win);
+
+  xgetch();
+  wprintw(local_win, "[SUCCESS]\n");
+  wrefresh (local_win);
 }
 
 void terminate_fake_sh ()
 {
-  attron (COLOR_PAIR (1));
-  printw("%% exit");
+  wattron (local_win, COLOR_PAIR (1));
+  wprintw(local_win, "%% exit");
 
   /* Terminate Ncurses */
-  refresh ();
-  getch ();
+  wrefresh (local_win);
+  xgetch ();
+  end_win ();
   endwin ();
+}
+
+void init_win_ ()
+{
+
+  height = LINES - 2;
+  width = COLS - 2;
+  startx = (COLS - width) /2;
+  starty = (LINES - height) /2;
+
+  local_win = newwin(height, width, starty, startx);
+  wborder(local_win, '~', '|', '-', '-', '+', '+', '+', '+');
+
+  wcolor_set(local_win, COLOR_PAIR(2), NULL);
+
+  scrollok (local_win, TRUE);
+  wsetscrreg(local_win, 1, height-2);
+
+  wmove (local_win, 1, 2);
+
+  wrefresh(local_win);
+}
+
+void end_win ()
+{
+  /* box(local_win, ' ', ' '); : This won't produce the desired
+   * result of erasing the window. It will leave it's four corners 
+   * and so an ugly remnant of window. 
+   */
+  wborder(local_win, ' ', ' ', ' ',' ',' ',' ',' ',' ');
+  /* The parameters taken are 
+   * 1. win: the window on which to operate
+   * 2. ls: character to be used for the left side of the window 
+   * 3. rs: character to be used for the right side of the window 
+   * 4. ts: character to be used for the top side of the window 
+   * 5. bs: character to be used for the bottom side of the window 
+   * 6. tl: character to be used for the top left corner of the window 
+   * 7. tr: character to be used for the top right corner of the window 
+   * 8. bl: character to be used for the bottom left corner of the window 
+   * 9. br: character to be used for the bottom right corner of the window
+   */
+  wrefresh(local_win);
+  delwin(local_win);
+}
+
+void xgetch ()
+{
+  switch(getchar())
+    {
+    case 13:
+      return;
+      break;
+    default:
+      xgetch ();
+    }
+
+  wrefresh (local_win);
+}
+
+char* read_string_from_file (char* filename)
+{
+  FILE* in_file;
+  char* string;
+
+  if ((in_file = fopen(filename, "r")) == NULL) {
+    fprintf(stderr, "Error: Cannot open input file.\n");
+    exit (-1);
+  }
+
+  size_t size;
+  fseek (in_file, 0L, SEEK_END);
+  size = ftell (in_file);
+  rewind (in_file);
+
+  string = (char*) malloc(size*sizeof(char));
+
+  fread (string, sizeof(char), size, in_file);
+
+  if (string == NULL || size <= 1) {
+    fprintf (stderr, "Error: Input file is empty.\n");
+    exit (-1);
+  }
+
+  fclose (in_file);
+
+  return string;
 }
 
 something_t* do_something_with_something (char* thing)
@@ -185,15 +270,17 @@ char something_extract_some_b (something_t* something)
 
 void something_do_something (something_t* something)
 {
-  attron (COLOR_PAIR (1));
-  printw("%% do something with something");
-  attroff (COLOR_PAIR (1));
+  wattron (local_win, COLOR_PAIR (1));
+  wprintw(local_win, "%% do something with something\n");
+  wattroff (local_win, COLOR_PAIR (1));
 
-  refresh ();
-  getch();
+  wrefresh (local_win);
+  xgetch();
 
-  printw("a) %s\n", something_extract_some_a (something));
-  printw("b) %i\n", something_extract_some_b (something));
+  wprintw(local_win, "> %s\n", something_extract_some_a (something));
+  wprintw(local_win, "> %i\n", something_extract_some_b (something));
+
+  wrefresh (local_win);
 }
 
 void undo_something_with_some_something (something_t* something)
@@ -304,15 +391,17 @@ char* something_awesome_extract_some_awesome_b (something_awesome_t* something_a
 
 void something_awesome_do_something_awesome (something_awesome_t* something_awesome)
 {
-  attron (COLOR_PAIR (1));
-  printw("%% do something awesome with some something");
-  attroff (COLOR_PAIR (1));
+  wattron (local_win, COLOR_PAIR (1));
+  wprintw(local_win, "%% do something awesome with some something\n");
+  wattroff (local_win, COLOR_PAIR (1));
 
-  refresh ();
-  getch();
+  wrefresh (local_win);
+  xgetch();
 
-  printw("a) [awesome] %s\n", something_awesome_extract_some_awesome_a (something_awesome));
-  printw("b) [awesome] %s\n", something_awesome_extract_some_awesome_b (something_awesome));
+  wprintw(local_win, "> [awesome] %s\n", something_awesome_extract_some_awesome_a (something_awesome));
+  wprintw(local_win, "> [awesome] %s\n", something_awesome_extract_some_awesome_b (something_awesome));
+
+  wrefresh (local_win);
 }
 
 void undo_something_awesome_with_some_something_awesome (something_awesome_t* something_awesome)
